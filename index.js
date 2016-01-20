@@ -54,108 +54,113 @@ HtmlWebpackPlugin.prototype.apply = function (compiler) {
   compiler.plugin('after-compile', function (compilation, callback) {
     // Clear the compilation queue
     delete compiler.HtmlWebpackPluginQueue;
+    callback();
+  });
 
-    var applyPluginsAsyncWaterfall = Promise.promisify(compilation.applyPluginsAsyncWaterfall, {context: compilation});
-    // Get all chunks
-    var chunks = self.filterChunks(compilation.getStats().toJson(), self.options.chunks, self.options.excludeChunks);
-    // Sort chunks
-    chunks = self.sortChunks(chunks, self.options.chunksSortMode);
-    // Get assets
-    var assets = self.htmlWebpackPluginAssets(compilation, chunks);
+  compiler.plugin('this-compilation', function (compilation, callback) {
+    compilation.plugin('after-optimize-chunk-assets', function(){
+      var applyPluginsAsyncWaterfall = Promise.promisify(compilation.applyPluginsAsyncWaterfall, {context: compilation});
+      // Get all chunks
+      var chunks = self.filterChunks(compilation.getStats().toJson(), self.options.chunks, self.options.excludeChunks);
+      // Sort chunks
+      chunks = self.sortChunks(chunks, self.options.chunksSortMode);
+      // Get assets
+      var assets = self.htmlWebpackPluginAssets(compilation, chunks);
 
-    // If the template and the assets did not change we don't have to emit the html
-    var assetJson = JSON.stringify(assets);
-    if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
-      return callback();
-    } else {
-      self.assetJson = assetJson;
-    }
+      // If the template and the assets did not change we don't have to emit the html
+      var assetJson = JSON.stringify(assets);
+      if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
+        return callback();
+      } else {
+        self.assetJson = assetJson;
+      }
 
-    Promise.resolve()
-      // Favicon
-      .then(function () {
-        if (self.options.favicon) {
-          return self.addFileToAssets(self.options.favicon, compilation)
-            .then(function (faviconBasename) {
-              assets.favicon = faviconBasename;
-            });
-        }
-      })
-      // Wait for the compilation to finish
-      .then(function () {
-        return compilationPromise;
-      })
-      .then(function (compiledTemplate) {
-        // Allow to use a custom function / string instead
-        if (self.options.templateContent) {
-          return self.options.templateContent;
-        }
-        // Once everything is compiled evaluate the html factory
-        // and replace it with its content
-        return self.evaluateCompilationResult(compilation, compiledTemplate);
-      })
-      // Execute the template
-      .then(function (compilationResult) {
-        // If the loader result is a function execute it to retreive the html
-        // otherwise use the returned html
-        return typeof compilationResult !== 'function'
-          ? compilationResult
-          : self.executeTemplate(compilationResult, chunks, assets, compilation);
-      })
-      // Allow plugins to change the html before assets are injected
-      .then(function (html) {
-        var pluginArgs = {html: html, assets: assets, plugin: self};
-        return applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-processing', pluginArgs)
-          .then(function () {
-            return pluginArgs.html;
-          });
-      })
-      .then(function (html) {
-        // Add the stylesheets, scripts and so on to the resulting html
-        return self.postProcessHtml(html, assets);
-      })
-      // Allow plugins to change the html after assets are injected
-      .then(function (html) {
-        var pluginArgs = {html: html, assets: assets, plugin: self};
-        return applyPluginsAsyncWaterfall('html-webpack-plugin-after-html-processing', pluginArgs)
-          .then(function () {
-            return pluginArgs.html;
-          });
-      })
-      .catch(function (err) {
-        // In case anything went wrong the promise is resolved
-        // with the error message and an error is logged
-        compilation.errors.push(prettyError(err, compiler.context).toString());
-        // Prevent caching
-        self.hash = null;
-        return self.options.showErrors ? prettyError(err, compiler.context).toHtml() : 'ERROR';
-      })
-      .then(function (html) {
-        // Replace the compilation result with the evaluated html code
-        compilation.assets[self.options.filename] = {
-          source: function () {
-            return html;
-          },
-          size: function () {
-            return html.length;
+      Promise.resolve()
+        // Favicon
+        .then(function () {
+          if (self.options.favicon) {
+            return self.addFileToAssets(self.options.favicon, compilation)
+              .then(function (faviconBasename) {
+                assets.favicon = faviconBasename;
+              });
           }
-        };
-      })
-      .then(function () {
-        // Let other plugins know that we are done:
-        return applyPluginsAsyncWaterfall('html-webpack-plugin-after-emit', {
-          html: compilation.assets[self.options.filename],
-          plugin: self
+        })
+        // Wait for the compilation to finish
+        .then(function () {
+          return compilationPromise;
+        })
+        .then(function (compiledTemplate) {
+          // Allow to use a custom function / string instead
+          if (self.options.templateContent) {
+            return self.options.templateContent;
+          }
+          // Once everything is compiled evaluate the html factory
+          // and replace it with its content
+          return self.evaluateCompilationResult(compilation, compiledTemplate);
+        })
+        // Execute the template
+        .then(function (compilationResult) {
+          // If the loader result is a function execute it to retreive the html
+          // otherwise use the returned html
+          return typeof compilationResult !== 'function'
+            ? compilationResult
+            : self.executeTemplate(compilationResult, chunks, assets, compilation);
+        })
+        // Allow plugins to change the html before assets are injected
+        .then(function (html) {
+          var pluginArgs = {html: html, assets: assets, plugin: self};
+          return applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-processing', pluginArgs)
+            .then(function () {
+              return pluginArgs.html;
+            });
+        })
+        .then(function (html) {
+          // Add the stylesheets, scripts and so on to the resulting html
+          return self.postProcessHtml(html, assets);
+        })
+        // Allow plugins to change the html after assets are injected
+        .then(function (html) {
+          var pluginArgs = {html: html, assets: assets, plugin: self};
+          return applyPluginsAsyncWaterfall('html-webpack-plugin-after-html-processing', pluginArgs)
+            .then(function () {
+              return pluginArgs.html;
+            });
+        })
+        .catch(function (err) {
+          // In case anything went wrong the promise is resolved
+          // with the error message and an error is logged
+          compilation.errors.push(prettyError(err, compiler.context).toString());
+          // Prevent caching
+          self.hash = null;
+          return self.options.showErrors ? prettyError(err, compiler.context).toHtml() : 'ERROR';
+        })
+        .then(function (html) {
+          // Replace the compilation result with the evaluated html code
+          compilation.assets[self.options.filename] = {
+            source: function () {
+              return html;
+            },
+            size: function () {
+              return html.length;
+            }
+          };
+        })
+        .then(function () {
+          // Let other plugins know that we are done:
+          return applyPluginsAsyncWaterfall('html-webpack-plugin-after-emit', {
+            html: compilation.assets[self.options.filename],
+            plugin: self
+          });
+        })
+        // Let webpack continue with it
+        .finally(function () {
+          callback();
+          // Tell blue bird that we don't want to wait for callback.
+          // Fixes "Warning: a promise was created in a handler but none were returned from it"
+          // https://github.com/petkaantonov/bluebird/blob/master/docs/docs/warning-explanations.md#warning-a-promise-was-created-in-a-handler-but-none-were-returned-from-it
+          return null;
         });
-      })
-      // Let webpack continue with it
-      .finally(function () {
-        callback();
-        // Tell blue bird that we don't want to wait for callback.
-        // Fixes "Warning: a promise was created in a handler but none were returned from it"
-        // https://github.com/petkaantonov/bluebird/blob/master/docs/docs/warning-explanations.md#warning-a-promise-was-created-in-a-handler-but-none-were-returned-from-it
-        return null;
-      });
+    });
   });
 };
 
