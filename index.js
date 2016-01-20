@@ -54,10 +54,7 @@ HtmlWebpackPlugin.prototype.apply = function (compiler) {
   compiler.plugin('after-compile', function (compilation, callback) {
     // Clear the compilation queue
     delete compiler.HtmlWebpackPluginQueue;
-    callback();
-  });
 
-  compiler.plugin('emit', function (compilation, callback) {
     var applyPluginsAsyncWaterfall = Promise.promisify(compilation.applyPluginsAsyncWaterfall, {context: compilation});
     // Get all chunks
     var chunks = self.filterChunks(compilation.getStats().toJson(), self.options.chunks, self.options.excludeChunks);
