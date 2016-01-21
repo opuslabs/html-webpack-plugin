@@ -57,8 +57,8 @@ HtmlWebpackPlugin.prototype.apply = function (compiler) {
     callback();
   });
 
-  compiler.plugin('this-compilation', function (compilation, callback) {
-    compilation.plugin('after-optimize-chunk-assets', function(){
+  compiler.plugin('this-compilation', function (compilation) {
+    compilation.plugin('optimize-chunk-assets', function(c, callback){
       var applyPluginsAsyncWaterfall = Promise.promisify(compilation.applyPluginsAsyncWaterfall, {context: compilation});
       // Get all chunks
       var chunks = self.filterChunks(compilation.getStats().toJson(), self.options.chunks, self.options.excludeChunks);
